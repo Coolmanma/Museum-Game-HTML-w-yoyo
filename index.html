@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #eee;
+      font-family: system-ui, sans-serif;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #game-root {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top, #333 0, #111 60%);
+    }
+
+    #game-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background: #000;
+      border: 2px solid #555;
+      box-shadow: 0 0 20px #000;
+      overflow: hidden;
+    }
+
+    #game-canvas {
+      background: #1b1b1b;
+      image-rendering: pixelated;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #ui-dialogue {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 180px;
+      background: rgba(0, 0, 0, 0.85);
+      border-top: 2px solid #555;
+      padding: 10px 16px;
+      box-sizing: border-box;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #ui-name {
+      font-weight: bold;
+      color: #ffd36b;
+      text-shadow: 0 0 4px #000;
+    }
+
+    #ui-text {
+      font-size: 15px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+
+    #ui-hint {
+      margin-top: auto;
+      font-size: 12px;
+      color: #aaa;
+      text-align: right;
+    }
+
+    #ui-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      color: #eee;
+      font-size: 18px;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    #ui-overlay button {
+      margin-top: 16px;
+      padding: 6px 14px;
+      background: #333;
+      color: #eee;
+      border: 1px solid #777;
+      cursor: pointer;
+    }
+
+    #ui-overlay button:hover {
+      background: #444;
+    }
+
+    #debug {
+      position: absolute;
+      top: 4px;
+      left: 6px;
+      font-size: 11px;
+      color: #888;
+      pointer-events: none;
+    }
+    /* Dialogue slide-in animation */
+    @keyframes slideIn {
+    from {
+        transform: translateY(200px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    }
+
+    #ui-dialogue.show {
+    animation: slideIn 0.35s ease-out forwards;
+    }
+
+
+    /* Typing effect */
+    .typing {
+    border-right: 2px solid #ffd36b;
+    animation: caretBlink 0.7s infinite;
+    }
+
+    @keyframes caretBlink {
+    0% { border-color: transparent; }
+    50% { border-color: #ffd36b; }
+    100% { border-color: transparent; }
+    }
+
+  </style>
+</head>
+<body>
+<div id="game-root">
+  <div id="game-container">
+    <canvas id="game-canvas" width="800" height="600"></canvas>
+
+    <div id="ui-dialogue">
+      <div id="ui-name"></div>
+      <div id="ui-text"></div>
+      <div id="ui-hint">[SPACE] continue</div>
+    </div>
+
+    <div id="ui-overlay">
+      <div>
+        <div id="ui-overlay-text"></div>
+        <button id="ui-overlay-btn">Start</button>
+      </div>
+    </div>
+
+    <div id="debug"></div>
+  </div>
+</div>
+
+<script>
+/*
+  Kiro Prototype
+  - Visual novel intro
+  - Small room with movement + Tie interaction
+  - Offline, single-file HTML
+*/
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+
+const uiDialogue = document.getElementById('ui-dialogue');
+const uiName = document.getElementById('ui-name');
+const uiText = document.getElementById('ui-text');
+const uiHint = document.getElementById('ui-hint');
+const uiOverlay = document.getElementById('ui-overlay');
+const uiOverlayText = document.getElementById('ui-overlay-text');
+const uiOverlayBtn = document.getElementById('ui-overlay-btn');
+const debugEl = document.getElementById('debug');
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === ' ') e.preventDefault();
+});
+window.addEventListener('keyup', e => {
+  keys[e.key.toLowerCase()] = false;
+});
+
+// --- GAME STATE ---
+const GameState = {
+  mode: 'vn', // 'vn' | 'map'
+  currentSceneId: 'intro_wakeup',
+  currentLineIndex: 0,
+  player: {
+    x: 400,
+    y: 320,
+    speed: 2.2,
+    size: 24,
+  },
+  mapId: 'room_1',
+  flags: {
+    metTie: false,
+    talkedToTie: false,
+  }
+};
+
+// --- SCENES (VN) ---
+const Scenes = {
+  intro_wakeup: {
+    lines: [
+      { speaker: 'Kiro', text: '...huh?\nWhy is everything so... dusty?' },
+      { speaker: 'Narrator', text: 'You wake up inside a sarcophagus.\nYour joints creak. Your bandages itch.\nYou are very, very dead.\nAnd somehow not.' },
+      { speaker: 'Kiro', text: 'Okay. So.\nEither this is a dream...\nOr I am the worst museum exhibit ever.' },
+      { speaker: '???', text: '*scoot... scoot...*' },
+      { speaker: 'Kiro', text: '...Who is scooting?' },
+      { speaker: 'Tie', text: 'Finally awake, mummy boy?\nYou looked like a tax write-off.' },
+      { speaker: 'Kiro', text: 'Who are you??\nAnd why are you on the floor?' },
+      { speaker: 'Tie', text: 'Name\'s Tie.\nCurrently kidnapped, mildly annoyed, and apparently your life coach.' },
+      { speaker: 'Narrator', text: 'You don\'t fully understand what\'s happening.\nBut you understand one thing:\nYou are in a museum.\nAnd you are not supposed to be moving.' },
+      { speaker: 'Tie', text: 'On the bright side, you\'re hired.\nCongrats. You work here now.' },
+      { speaker: 'Kiro', text: 'I WHAT.' },
+      { speaker: 'Narrator', text: 'Your story begins here:\n"The time I woke up inside a museum and now my boss is making me fetch artifacts."' },
+    ],
+    onComplete: () => {
+      GameState.mode = 'map';
+      GameState.mapId = 'room_1';
+      GameState.player.x = 400;
+      GameState.player.y = 360;
+      hideDialogue();
+    }
+  }
+};
+
+// --- MAPS ---
+const Maps = {
+  room_1: {
+    name: 'Museum Storage Room',
+    width: 800,
+    height: 600,
+    walls: [
+      { x: 0, y: 0, w: 800, h: 40 },
+      { x: 0, y: 0, w: 40, h: 600 },
+      { x: 0, y: 560, w: 800, h: 40 },
+      { x: 760, y: 0, w: 40, h: 600 },
+      { x: 360, y: 220, w: 80, h: 40 },
+    ],
+    npcs: [
+      {
+        id: 'tie',
+        name: 'Tie',
+        x: 420,
+        y: 280,
+        w: 24,
+        h: 24,
+        color: '#8cf',
+        interact: () => {
+          startDialogue({
+            id: 'tie_first',
+            lines: [
+              { speaker: 'Tie', text: 'There you are. Upright and everything.\nDidn\'t think you had it in you.' },
+              { speaker: 'Kiro', text: 'Pretty sure I don\'t have most things in me.\nOrgans, for example.' },
+              { speaker: 'Tie', text: 'Details.\nListen, mummy boy, you\'re on payroll now.' },
+              { speaker: 'Kiro', text: 'Payroll?? I literally just woke up.' },
+              { speaker: 'Tie', text: 'Yeah. Museum needed cheap labor.\nYou\'re technically "historical enrichment".' },
+              { speaker: 'Tie', text: 'Walk around. Try not to fall apart.\nWe\'ll talk artifacts later.' },
+            ],
+            onComplete: () => {
+              GameState.flags.talkedToTie = true;
+            }
+          });
+          GameState.flags.metTie = true;
+        }
+      }
+    ]
+  }
+};
+
+// --- DIALOGUE SYSTEM ---
+let activeDialogue = null;
+
+function startDialogue(sceneLike) {
+  activeDialogue = {
+    id: sceneLike.id || null,
+    lines: sceneLike.lines || [],
+    index: 0,
+    onComplete: sceneLike.onComplete || null
+  };
+  GameState.mode = 'vn';
+  showDialogue();
+  renderDialogueLine();
+}
+
+function showDialogue() {
+  uiDialogue.style.display = 'flex';
+  uiDialogue.classList.add("show");
+}
+
+function hideDialogue() {
+  uiDialogue.style.display = 'none';
+}
+
+let typingInterval = null;
+
+function renderDialogueLine() {
+  if (!activeDialogue) return;
+
+  const line = activeDialogue.lines[activeDialogue.index];
+  if (!line) return;
+
+  uiName.textContent = line.speaker || '';
+
+  // Reset typing
+  clearInterval(typingInterval);
+  uiText.textContent = "";
+  uiText.classList.add("typing");
+
+  const full = line.text;
+  let i = 0;
+
+  typingInterval = setInterval(() => {
+    uiText.textContent = full.slice(0, i);
+    i++;
+
+    if (i > full.length) {
+      clearInterval(typingInterval);
+      uiText.classList.remove("typing");
+    }
+  }, 18); // typing speed
+}
+
+
+
+function advanceDialogue() {
+  if (!activeDialogue) {
+    const scene = Scenes[GameState.currentSceneId];
+    if (!scene) return;
+    GameState.currentLineIndex++;
+    const line = scene.lines[GameState.currentLineIndex];
+    if (!line) {
+      if (scene.onComplete) scene.onComplete();
+      return;
+    }
+    uiName.textContent = line.speaker || '';
+    uiText.textContent = line.text || '';
+    return;
+  }
+
+  activeDialogue.index++;
+  const line = activeDialogue.lines[activeDialogue.index];
+  if (!line) {
+    const cb = activeDialogue.onComplete;
+    activeDialogue = null;
+    hideDialogue();
+    GameState.mode = 'map';
+    if (cb) cb();
+    return;
+  }
+  uiName.textContent = line.speaker || '';
+  uiText.textContent = line.text || '';
+}
+
+// --- OVERLAY ---
+function showOverlay(text, buttonLabel) {
+  uiOverlayText.textContent = text;
+  uiOverlayBtn.textContent = buttonLabel || 'OK';
+  uiOverlay.style.display = 'flex';
+}
+
+function hideDialogue() {
+  uiDialogue.classList.remove("show");
+  uiDialogue.style.display = 'none';
+}
+
+function hideOverlay() {
+  uiOverlay.style.display = 'none';
+}
+
+uiOverlayBtn.addEventListener('click', () => {
+  hideOverlay();
+  GameState.mode = 'vn';
+  GameState.currentSceneId = 'intro_wakeup';
+  GameState.currentLineIndex = 0;
+  const scene = Scenes[GameState.currentSceneId];
+  uiName.textContent = scene.lines[0].speaker || '';
+  uiText.textContent = scene.lines[0].text || '';
+  showDialogue();
+});
+
+// --- MOVEMENT / COLLISION ---
+function movePlayer(dt) {
+  const p = GameState.player;
+  const map = Maps[GameState.mapId];
+  if (!map) return;
+
+  let dx = 0, dy = 0;
+  if (keys['arrowup'] || keys['w']) dy -= 1;
+  if (keys['arrowdown'] || keys['s']) dy += 1;
+  if (keys['arrowleft'] || keys['a']) dx -= 1;
+  if (keys['arrowright'] || keys['d']) dx += 1;
+
+  if (dx === 0 && dy === 0) return;
+
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len;
+  dy /= len;
+
+  const speed = p.speed * dt * 60;
+
+  const newX = p.x + dx * speed;
+  const newY = p.y + dy * speed;
+
+  if (!collides(newX, p.y, p.size, p.size, map.walls)) {
+    p.x = newX;
+  }
+  if (!collides(p.x, newY, p.size, p.size, map.walls)) {
+    p.y = newY;
+  }
+}
+
+function collides(x, y, w, h, walls) {
+  for (const wall of walls) {
+    if (x < wall.x + wall.w &&
+        x + w > wall.x &&
+        y < wall.y + wall.h &&
+        y + h > wall.y) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// --- INTERACTION ---
+function tryInteract() {
+  const map = Maps[GameState.mapId];
+  if (!map) return;
+  const p = GameState.player;
+
+  for (const npc of map.npcs) {
+    const dist = Math.hypot(p.x - npc.x, p.y - npc.y);
+    if (dist < 40) {
+      if (npc.interact) npc.interact();
+      break;
+    }
+  }
+}
+
+// --- RENDERING ---
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (GameState.mode === 'map') {
+    renderMap();
+  } else if (GameState.mode === 'vn') {
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  debugEl.textContent = `mode: ${GameState.mode}`;
+}
+
+function renderMap() {
+  const map = Maps[GameState.mapId];
+  if (!map) return;
+
+  ctx.fillStyle = '#202020';
+  ctx.fillRect(0, 0, map.width, map.height);
+
+  ctx.fillStyle = '#252525';
+  for (let y = 40; y < map.height - 40; y += 40) {
+    for (let x = 40; x < map.width - 40; x += 40) {
+      ctx.fillRect(x, y, 38, 38);
+    }
+  }
+
+  ctx.fillStyle = '#444';
+  for (const wall of map.walls) {
+    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+  }
+
+  ctx.fillStyle = '#7b5b2b';
+  ctx.fillRect(360, 220, 80, 40);
+  ctx.strokeStyle = '#cfa96a';
+  ctx.strokeRect(360, 220, 80, 40);
+
+  for (const npc of map.npcs) {
+    ctx.fillStyle = npc.color || '#ff0';
+    ctx.fillRect(npc.x - npc.w / 2, npc.y - npc.h / 2, npc.w, npc.h);
+  }
+
+  const p = GameState.player;
+  ctx.fillStyle = '#d9c27a';
+  ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+
+  const mapNpc = map.npcs.find(npc => Math.hypot(p.x - npc.x, p.y - npc.y) < 40);
+  if (mapNpc) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(p.x - 60, p.y - 60, 120, 24);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press [E] to talk', p.x, p.y - 43);
+  }
+}
+
+// --- MAIN LOOP ---
+let lastTime = performance.now();
+
+function loop(now) {
+  const dt = (now - lastTime) / 1000;
+  lastTime = now;
+
+  if (GameState.mode === 'map' && !activeDialogue) {
+    movePlayer(dt);
+  }
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+
+// --- INPUT HANDLING ---
+window.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.key === 'Enter') {
+    if (GameState.mode === 'vn') {
+      if (activeDialogue) {
+        advanceDialogue();
+      } else {
+        advanceDialogue();
+      }
+    }
+  }
+  if (e.key.toLowerCase() === 'e') {
+    if (GameState.mode === 'map' && !activeDialogue) {
+      tryInteract();
+    }
+  }
+});
+
+// --- INIT ---
+showOverlay(
+  'The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\nArrow keys / WASD: move\nE: interact\nSPACE: advance dialogue',
+  'Begin'
+);
+
+function showOverlay(text, buttonLabel) {
+  uiOverlayText.textContent = text;
+  uiOverlayBtn.textContent = buttonLabel || 'OK';
+  uiOverlay.style.display = 'flex';
+}
+</script>
+</body>
+</html>
