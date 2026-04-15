@@ -5,7 +5,7 @@ This game had time and effort put in, please DO NOT steal anything inside of thi
 Creators:
 
   Yoyo - (Discord: yoyof30) Illustrator and idea maker
-      
+      Yuuzhang45@gmail.com
   Coolmanma (Discord: ThatOneDev/awesomegamer_021) Programmer
 
 
