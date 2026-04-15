@@ -123,9 +123,8 @@
     }
 
     #ui-dialogue.show {
-    animation: slideIn 0.35s ease-out forwards;
+      animation: slideIn 0.35s ease-out forwards;
     }
-
 
     /* Typing effect */
     .typing {
@@ -313,6 +312,11 @@ function renderDialogueLine() {
   const line = activeDialogue.lines[activeDialogue.index];
   if (!line) return;
 
+  // Restart slide animation every line
+  uiDialogue.classList.remove("show");
+  void uiDialogue.offsetWidth; 
+  uiDialogue.classList.add("show");
+
   uiName.textContent = line.speaker || '';
 
   // Reset typing
@@ -331,10 +335,8 @@ function renderDialogueLine() {
       clearInterval(typingInterval);
       uiText.classList.remove("typing");
     }
-  }, 18); // typing speed
+  }, 18);
 }
-
-
 
 function advanceDialogue() {
   if (!activeDialogue) {
