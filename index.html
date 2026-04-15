@@ -48,21 +48,21 @@
       right: 0;
       bottom: 0;
       height: 180px;
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.9);
       border-top: 2px solid #555;
       padding: 10px 16px;
       box-sizing: border-box;
       display: none;
       flex-direction: column;
       gap: 6px;
-      transform: translateY(200px);
+      transform: translateY(40px);
       opacity: 0;
     }
 
-    /* Slide animation */
-    @keyframes slideIn {
+    /* Slide + fade animation (0.6s) */
+    @keyframes dialogueSlideFadeIn {
       from {
-        transform: translateY(200px);
+        transform: translateY(40px);
         opacity: 0;
       }
       to {
@@ -72,12 +72,15 @@
     }
 
     #ui-dialogue.show {
-      animation: slideIn 0.35s ease-out forwards;
+      animation: dialogueSlideFadeIn 0.6s ease-out forwards;
     }
 
     #ui-name {
       font-weight: bold;
-      color: #ffd36b;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-block;
+      max-width: 60%;
       text-shadow: 0 0 4px #000;
     }
 
@@ -85,6 +88,7 @@
       font-size: 15px;
       line-height: 1.4;
       white-space: pre-wrap;
+      margin-top: 4px;
     }
 
     #ui-hint {
@@ -106,6 +110,7 @@
       100% { border-color: transparent; }
     }
 
+    /* Overlay */
     #ui-overlay {
       position: absolute;
       inset: 0;
@@ -120,8 +125,16 @@
       box-sizing: border-box;
     }
 
-    #ui-overlay button {
-      margin-top: 16px;
+    #ui-overlay-inner {
+      max-width: 520px;
+    }
+
+    #ui-overlay-text {
+      margin-bottom: 16px;
+      white-space: pre-wrap;
+    }
+
+    #ui-overlay-btn {
       padding: 6px 14px;
       background: #333;
       color: #eee;
@@ -129,7 +142,7 @@
       cursor: pointer;
     }
 
-    #ui-overlay button:hover {
+    #ui-overlay-btn:hover {
       background: #444;
     }
 
@@ -148,14 +161,16 @@
   <div id="game-container">
     <canvas id="game-canvas" width="800" height="600"></canvas>
 
+    <!-- Dialogue UI -->
     <div id="ui-dialogue">
       <div id="ui-name"></div>
       <div id="ui-text"></div>
-      <div id="ui-hint">[SPACE] continue</div>
+      <div id="ui-hint">SPACE: finish / advance</div>
     </div>
 
+    <!-- Overlay -->
     <div id="ui-overlay">
-      <div>
+      <div id="ui-overlay-inner">
         <div id="ui-overlay-text"></div>
         <button id="ui-overlay-btn">Start</button>
       </div>
@@ -166,61 +181,120 @@
 </div>
 
 <script>
-// ------------------------------------------------------------
-// GAME STATE
-// ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // DOM + CANVAS SETUP
+  // ------------------------------------------------------------
+  const canvas = document.getElementById("game-canvas");
+  const ctx = canvas.getContext("2d");
 
-const keys = {};
-window.addEventListener("keydown", e => {
-  keys[e.key.toLowerCase()] = true;
-  if (e.key === " ") e.preventDefault();
-});
-window.addEventListener("keyup", e => {
-  keys[e.key.toLowerCase()] = false;
-});
+  const uiDialogue = document.getElementById("ui-dialogue");
+  const uiName = document.getElementById("ui-name");
+  const uiText = document.getElementById("ui-text");
+  const uiHint = document.getElementById("ui-hint");
 
-const GameState = {
-  mode: "vn", // 'vn' or 'map'
-  currentSceneId: "intro",
-  currentLineIndex: 0,
-  player: { x: 400, y: 360, size: 24, speed: 2.2 },
-  mapId: "room_1",
-  flags: {}
-};
+  const uiOverlay = document.getElementById("ui-overlay");
+  const uiOverlayText = document.getElementById("ui-overlay-text");
+  const uiOverlayBtn = document.getElementById("ui-overlay-btn");
 
-// ------------------------------------------------------------
-// SCENES
-// ------------------------------------------------------------
+  const debugEl = document.getElementById("debug");
 
-const Scenes = {
-  intro: {
-    lines: [
-      { speaker: "Kiro", text: "...huh?\nWhy is everything so... dusty?" },
-      { speaker: "Narrator", text: "You wake up inside a sarcophagus.\nYour joints creak. Your bandages itch.\nYou are very, very dead.\nAnd somehow not." },
-      { speaker: "Kiro", text: "Okay. So.\nEither this is a dream...\nOr I am the worst museum exhibit ever." },
-      { speaker: "???", text: "*scoot... scoot...*" },
-      { speaker: "Kiro", text: "...Who is scooting?" },
-      { speaker: "Tie", text: "Finally awake, mummy boy?\nYou looked like a tax write-off." },
-      { speaker: "Kiro", text: "Who are you??\nAnd why are you on the floor?" },
-      { speaker: "Tie", text: "Name's Tie.\nCurrently kidnapped, mildly annoyed, and apparently your life coach." },
-      { speaker: "Narrator", text: "You don't fully understand what's happening.\nBut you understand one thing:\nYou are in a museum.\nAnd you are not supposed to be moving." },
-      { speaker: "Tie", text: "On the bright side, you're hired.\nCongrats. You work here now." },
-      { speaker: "Kiro", text: "I WHAT." },
-      { speaker: "Narrator", text: "Your story begins here:\n\"The time I woke up inside a museum and now my boss is making me fetch artifacts.\"" }
+  // ------------------------------------------------------------
+  // CHARACTER STYLES (nameplate colors)
+  // ------------------------------------------------------------
+  const CharacterStyles = {
+    "???": { name: "???", color: "#e6d0bd" },          // Kiro early
+    Narrator: { name: "Narrator", color: "#ffffff" },
+    Kid: { name: "Kid", color: "#d0d0d0" },
+    Father: { name: "Father", color: "#d0d0d0" },
+    Doctor: { name: "Doctor", color: "#d0d0d0" },
+    Kiro: { name: "Kiro", color: "#e6d0bd" },          // later, if used
+    Tie: { name: "Tie", color: "#ff7266" },            // new Tie color
+    Dustworth: { name: "Mr. Morgan Dustworth", color: "#98f2e7" } // new Dustworth color
+  };
+
+  function applySpeakerStyle(speaker) {
+    const style = CharacterStyles[speaker] || null;
+    if (!style) {
+      uiName.style.backgroundColor = "#444";
+      uiName.style.color = "#fff";
+      uiName.textContent = speaker || "";
+      return;
+    }
+    uiName.style.backgroundColor = style.color;
+    uiName.style.color = "#111";
+    uiName.textContent = style.name;
+  }
+
+  // ------------------------------------------------------------
+  // KIRO SPRITES (adjustable filenames)
+  // ------------------------------------------------------------
+  const KiroSprites = {
+    idle: [
+      "Assets/Kiro/kiro_idle_1.png",
+      "Assets/Kiro/kiro_idle_2.png"
     ],
-    onComplete: () => {
-      GameState.mode = "map";
-      hideDialogue();
+    walk: [
+      "Assets/Kiro/kiro_walk_1.png",
+      "Assets/Kiro/kiro_walk_2.png"
+    ]
+  };
+
+  const KiroImages = {
+    idle: [],
+    walk: []
+  };
+
+  function loadKiroSprites() {
+    for (const frame of KiroSprites.idle) {
+      const img = new Image();
+      img.src = frame;
+      KiroImages.idle.push(img);
+    }
+    for (const frame of KiroSprites.walk) {
+      const img = new Image();
+      img.src = frame;
+      KiroImages.walk.push(img);
     }
   }
-};
+  loadKiroSprites();
 
-// ------------------------------------------------------------
-// MAPS
-// ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // INPUT STATE
+  // ------------------------------------------------------------
+  const keys = {};
+  window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === " ") e.preventDefault();
+  });
+  window.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+  });
 
-const Maps = {
-  room_1: {
+  // ------------------------------------------------------------
+  // GLOBAL GAME STATE
+  // ------------------------------------------------------------
+  const GameState = {
+    mode: "overlay",   // 'overlay' | 'vn' | 'map'
+    mapId: "room_1",
+    player: {
+      x: 400,
+      y: 360,
+      size: 32,
+      speed: 1.5,
+      animState: "idle",
+      animFrame: 0,
+      animTimer: 0
+    },
+    flags: {}
+  };
+
+  const Maps = {};
+  const Scenes = {};
+
+  // ------------------------------------------------------------
+  // MAPS
+  // ------------------------------------------------------------
+  Maps.room_1 = {
     width: 800,
     height: 600,
     walls: [
@@ -228,17 +302,17 @@ const Maps = {
       { x: 0, y: 0, w: 40, h: 600 },
       { x: 0, y: 560, w: 800, h: 40 },
       { x: 760, y: 0, w: 40, h: 600 },
-      { x: 360, y: 220, w: 80, h: 40 }
+      { x: 360, y: 220, w: 80, h: 40 } // sarcophagus
     ],
     npcs: [
       {
         id: "tie",
-        name: "Tie",
+        speakerKey: "Tie",
         x: 420,
         y: 280,
         w: 24,
         h: 24,
-        color: "#8cf",
+        color: "#ff7266",
         interact: () => {
           startDialogue({
             lines: [
@@ -251,242 +325,429 @@ const Maps = {
             ]
           });
         }
+      },
+      {
+        id: "dustworth",
+        speakerKey: "Dustworth",
+        x: 200,
+        y: 200,
+        w: 24,
+        h: 24,
+        color: "#98f2e7",
+        interact: () => {
+          startDialogue({
+            lines: [
+              {
+                speaker: "Dustworth",
+                text: "Hello! My name is Morgan Dustworth—\n—but please, call me Morgan.\nI'm so delighted you're here."
+              },
+              {
+                speaker: "Dustworth",
+                text: "You look like someone with tremendous potential.\nThe kind of potential that keeps the lights on."
+              },
+              {
+                speaker: "Kiro",
+                text: "Is that... a compliment or a threat?"
+              },
+              {
+                speaker: "Dustworth",
+                text: "Why not both?\nThink of yourself as a very valuable... asset."
+              }
+            ]
+          });
+        }
       }
     ]
-  }
-};
-
-// ------------------------------------------------------------
-// DIALOGUE SYSTEM
-// ------------------------------------------------------------
-
-let activeDialogue = null;
-let typingInterval = null;
-
-function startDialogue(scene) {
-  activeDialogue = {
-    lines: scene.lines,
-    index: 0,
-    onComplete: scene.onComplete || null
   };
-  GameState.mode = "vn";
-  showDialogue();
-  renderDialogueLine();
-}
 
-function showDialogue() {
-  uiDialogue.style.display = "flex";
-  uiDialogue.classList.add("show");
-}
-
-function hideDialogue() {
-  uiDialogue.classList.remove("show");
-  uiDialogue.style.display = "none";
-}
-
-function renderDialogueLine() {
-  const line = activeDialogue.lines[activeDialogue.index];
-  if (!line) return;
-
-  // Restart slide animation
-  uiDialogue.classList.remove("show");
-  void uiDialogue.offsetWidth;
-  uiDialogue.classList.add("show");
-
-  uiName.textContent = line.speaker;
-  uiText.textContent = "";
-  uiText.classList.add("typing");
-
-  clearInterval(typingInterval);
-
-  let i = 0;
-  const full = line.text;
-
-  typingInterval = setInterval(() => {
-    uiText.textContent = full.slice(0, i);
-    i++;
-
-    if (i > full.length) {
-      clearInterval(typingInterval);
-      uiText.classList.remove("typing");
+  // ------------------------------------------------------------
+  // INTRO SCENE (your new script)
+  // ------------------------------------------------------------
+  Scenes.intro = {
+    lines: [
+      { speaker: "???", text: "(...huh?\nWhy is everything so... bright?)" },
+      {
+        speaker: "Narrator",
+        text: "You wake up inside a glass case.\nYour joints creak. Your bandages itch.\nYou are very, very dead.\nAnd somehow not."
+      },
+      {
+        speaker: "Kid",
+        text: "Dad, look! It's a mummy!"
+      },
+      {
+        speaker: "Narrator",
+        text: "You look at the kid talking ever so loudly and eagerly.\nThe kid then freezes up, shocked and starts...\n\nCrying?"
+      },
+      {
+        speaker: "Kid",
+        text: "WAHHHHHH I-I-I-I-IT MOVED!!"
+      },
+      {
+        speaker: "???",
+        text: "*...*"
+      },
+      {
+        speaker: "Narrator",
+        text: "The dad steps closer to the kid and drags them off."
+      },
+      {
+        speaker: "Father",
+        text: "Shh shh shhh, stop crying… haha… it's okay! See? It's not moving… right Mr. Dustworth?"
+      },
+      {
+        speaker: "Dustworth",
+        text: "Oh? Kids these days surely have a bright imagination."
+      },
+      {
+        speaker: "Narrator",
+        text: "Mr. Dustworth walks over to look at your case.\nHe looks a bit surprised by you, being an artifact, blinking."
+      },
+      {
+        speaker: "Dustworth",
+        text: "It's truly nothing… hehe."
+      },
+      {
+        speaker: "Narrator",
+        text: "Mr. Dustworth assures the father as he dials a number on his phone.\nYou close your eyes, a bit too tired yet too energetic."
+      },
+      {
+        speaker: "Doctor",
+        text: "Ah I see, you're finally awake"
+      },
+      {
+        speaker: "Tie",
+        text: "*scoot scoot*\nUgh, it's been a week and this f*cker still hasn't fed me…"
+      },
+      {
+        speaker: "Narrator",
+        text: "An annoyed voice complains.\nIt stops scooting."
+      }
+    ],
+    onComplete: () => {
+      GameState.mode = "map";
+      hideDialogue();
     }
-  }, 18);
-}
+  };
 
-function advanceDialogue() {
-  if (!activeDialogue) return;
+  // ------------------------------------------------------------
+  // DIALOGUE SYSTEM
+  // ------------------------------------------------------------
+  let activeDialogue = null;
+  let typingInterval = null;
+  let isTyping = false;
 
-  activeDialogue.index++;
-
-  if (activeDialogue.index >= activeDialogue.lines.length) {
-    const cb = activeDialogue.onComplete;
-    activeDialogue = null;
-    hideDialogue();
-    GameState.mode = "map";
-    if (cb) cb();
-    return;
+  function showDialogue() {
+    uiDialogue.style.display = "flex";
+    uiDialogue.classList.add("show");
   }
 
-  renderDialogueLine();
-}
-
-// ------------------------------------------------------------
-// MOVEMENT + COLLISION
-// ------------------------------------------------------------
-
-function movePlayer(dt) {
-  const p = GameState.player;
-  const map = Maps[GameState.mapId];
-
-  let dx = 0, dy = 0;
-  if (keys["w"] || keys["arrowup"]) dy -= 1;
-  if (keys["s"] || keys["arrowdown"]) dy += 1;
-  if (keys["a"] || keys["arrowleft"]) dx -= 1;
-  if (keys["d"] || keys["arrowright"]) dx += 1;
-
-  if (dx === 0 && dy === 0) return;
-
-  const len = Math.hypot(dx, dy) || 1;
-  dx /= len;
-  dy /= len;
-
-  const speed = p.speed * dt * 60;
-
-  const newX = p.x + dx * speed;
-  const newY = p.y + dy * speed;
-
-  if (!collides(newX, p.y, p.size, p.size, map.walls)) p.x = newX;
-  if (!collides(p.x, newY, p.size, p.size, map.walls)) p.y = newY;
-}
-
-function collides(x, y, w, h, walls) {
-  for (const wall of walls) {
-    if (x < wall.x + wall.w &&
-        x + w > wall.x &&
-        y < wall.y + wall.h &&
-        y + h > wall.y) {
-      return true;
-    }
+  function hideDialogue() {
+    uiDialogue.classList.remove("show");
+    uiDialogue.style.display = "none";
   }
-  return false;
-}
 
-// ------------------------------------------------------------
-// INTERACTION
-// ------------------------------------------------------------
+  function startDialogue(scene) {
+    activeDialogue = {
+      lines: scene.lines,
+      index: 0,
+      onComplete: scene.onComplete || null
+    };
+    GameState.mode = "vn";
+    showDialogue();
+    renderDialogueLine();
+  }
 
-function tryInteract() {
-  const map = Maps[GameState.mapId];
-  const p = GameState.player;
+  function renderDialogueLine() {
+    if (!activeDialogue) return;
+    const line = activeDialogue.lines[activeDialogue.index];
+    if (!line) return;
 
-  for (const npc of map.npcs) {
-    const dist = Math.hypot(p.x - npc.x, p.y - npc.y);
-    if (dist < 40) {
-      npc.interact();
+    applySpeakerStyle(line.speaker);
+    uiText.textContent = "";
+    uiText.classList.add("typing");
+
+    clearInterval(typingInterval);
+    isTyping = true;
+
+    const full = line.text;
+    let i = 0;
+
+    typingInterval = setInterval(() => {
+      i++;
+      uiText.textContent = full.slice(0, i);
+      if (i >= full.length) {
+        clearInterval(typingInterval);
+        uiText.classList.remove("typing");
+        isTyping = false;
+      }
+    }, 20);
+  }
+
+  function finishTypingInstantly() {
+    if (!activeDialogue) return;
+    const line = activeDialogue.lines[activeDialogue.index];
+    if (!line) return;
+
+    clearInterval(typingInterval);
+    uiText.textContent = line.text;
+    uiText.classList.remove("typing");
+    isTyping = false;
+  }
+
+  function advanceDialogue() {
+    if (!activeDialogue) return;
+
+    activeDialogue.index++;
+    if (activeDialogue.index >= activeDialogue.lines.length) {
+      const cb = activeDialogue.onComplete;
+      activeDialogue = null;
+      hideDialogue();
+      GameState.mode = "map";
+      if (cb) cb();
       return;
     }
-  }
-}
-
-// ------------------------------------------------------------
-// RENDERING
-// ------------------------------------------------------------
-
-function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (GameState.mode === "map") renderMap();
-  else ctx.fillStyle = "#111", ctx.fillRect(0, 0, 800, 600);
-}
-
-function renderMap() {
-  const map = Maps[GameState.mapId];
-
-  ctx.fillStyle = "#202020";
-  ctx.fillRect(0, 0, map.width, map.height);
-
-  ctx.fillStyle = "#252525";
-  for (let y = 40; y < map.height - 40; y += 40)
-    for (let x = 40; x < map.width - 40; x += 40)
-      ctx.fillRect(x, y, 38, 38);
-
-  ctx.fillStyle = "#444";
-  for (const wall of map.walls)
-    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
-
-  ctx.fillStyle = "#7b5b2b";
-  ctx.fillRect(360, 220, 80, 40);
-  ctx.strokeStyle = "#cfa96a";
-  ctx.strokeRect(360, 220, 80, 40);
-
-  for (const npc of map.npcs) {
-    ctx.fillStyle = npc.color;
-    ctx.fillRect(npc.x - npc.w / 2, npc.y - npc.h / 2, npc.w, npc.h);
+    renderDialogueLine();
   }
 
-  const p = GameState.player;
-  ctx.fillStyle = "#d9c27a";
-  ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-}
+  // ------------------------------------------------------------
+  // COLLISION
+  // ------------------------------------------------------------
+  function collides(x, y, w, h, walls) {
+    for (const wall of walls) {
+      if (
+        x < wall.x + wall.w &&
+        x + w > wall.x &&
+        y < wall.y + wall.h &&
+        y + h > wall.y
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
 
-// ------------------------------------------------------------
-// MAIN LOOP
-// ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // MOVEMENT (normalized, pixel-snappy)
+  // ------------------------------------------------------------
+  function movePlayer(dt) {
+    const p = GameState.player;
+    const map = Maps[GameState.mapId];
 
-let last = performance.now();
-function loop(now) {
-  const dt = (now - last) / 1000;
-  last = now;
+    let dx = 0, dy = 0;
 
-  if (GameState.mode === "map") movePlayer(dt);
+    if (keys["w"] || keys["arrowup"]) dy -= 1;
+    if (keys["s"] || keys["arrowdown"]) dy += 1;
+    if (keys["a"] || keys["arrowleft"]) dx -= 1;
+    if (keys["d"] || keys["arrowright"]) dx += 1;
 
-  render();
+    if (dx === 0 && dy === 0) {
+      p.animState = "idle";
+      return;
+    }
+
+    const len = Math.hypot(dx, dy);
+    dx = Math.round((dx / len) * p.speed);
+    dy = Math.round((dy / len) * p.speed);
+
+    const newX = p.x + dx;
+    if (!collides(newX - p.size / 2, p.y - p.size / 2, p.size, p.size, map.walls)) {
+      p.x = newX;
+    }
+
+    const newY = p.y + dy;
+    if (!collides(p.x - p.size / 2, newY - p.size / 2, p.size, p.size, map.walls)) {
+      p.y = newY;
+    }
+
+    p.animState = "walk";
+  }
+
+  // ------------------------------------------------------------
+  // KIRO ANIMATION
+  // ------------------------------------------------------------
+  function updateKiroAnimation(dt) {
+    const p = GameState.player;
+
+    const idleSpeed = 0.6;
+    const walkSpeed = 0.15;
+
+    p.animTimer += dt;
+
+    if (p.animState === "idle") {
+      if (p.animTimer >= idleSpeed) {
+        p.animTimer = 0;
+        p.animFrame = (p.animFrame + 1) % KiroImages.idle.length;
+      }
+    }
+
+    if (p.animState === "walk") {
+      if (p.animTimer >= walkSpeed) {
+        p.animTimer = 0;
+        p.animFrame = (p.animFrame + 1) % KiroImages.walk.length;
+      }
+    }
+  }
+
+  function drawKiro() {
+    const p = GameState.player;
+
+    let img;
+    if (p.animState === "idle") {
+      img = KiroImages.idle[p.animFrame] || KiroImages.idle[0];
+    } else {
+      img = KiroImages.walk[p.animFrame] || KiroImages.walk[0];
+    }
+
+    if (img && img.complete) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(
+        img,
+        p.x - p.size / 2,
+        p.y - p.size / 2,
+        p.size,
+        p.size
+      );
+    } else {
+      ctx.fillStyle = "#d9c27a";
+      ctx.fillRect(
+        p.x - p.size / 2,
+        p.y - p.size / 2,
+        p.size,
+        p.size
+      );
+    }
+  }
+
+  // ------------------------------------------------------------
+  // INTERACTION
+  // ------------------------------------------------------------
+  function tryInteract() {
+    const map = Maps[GameState.mapId];
+    const p = GameState.player;
+
+    for (const npc of map.npcs) {
+      const dist = Math.hypot(p.x - npc.x, p.y - npc.y);
+      if (dist < 40) {
+        npc.interact();
+        return;
+      }
+    }
+  }
+
+  // ------------------------------------------------------------
+  // RENDERING
+  // ------------------------------------------------------------
+  function renderMap() {
+    const map = Maps[GameState.mapId];
+
+    ctx.fillStyle = "#202020";
+    ctx.fillRect(0, 0, map.width, map.height);
+
+    ctx.fillStyle = "#252525";
+    for (let y = 40; y < map.height - 40; y += 40) {
+      for (let x = 40; x < map.width - 40; x += 40) {
+        ctx.fillRect(x, y, 38, 38);
+      }
+    }
+
+    ctx.fillStyle = "#444";
+    for (const wall of map.walls) {
+      ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+    }
+
+    ctx.fillStyle = "#7b5b2b";
+    ctx.fillRect(360, 220, 80, 40);
+    ctx.strokeStyle = "#cfa96a";
+    ctx.strokeRect(360, 220, 80, 40);
+
+    for (const npc of map.npcs) {
+      ctx.fillStyle = npc.color;
+      ctx.fillRect(
+        npc.x - npc.w / 2,
+        npc.y - npc.h / 2,
+        npc.w,
+        npc.h
+      );
+    }
+
+    drawKiro();
+  }
+
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (GameState.mode === "map") {
+      renderMap();
+    } else {
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    debugEl.textContent = `mode: ${GameState.mode}`;
+  }
+
+  // ------------------------------------------------------------
+  // MAIN LOOP
+  // ------------------------------------------------------------
+  let last = performance.now();
+  function loop(now) {
+    const dt = (now - last) / 1000;
+    last = now;
+
+    if (GameState.mode === "map") {
+      movePlayer(dt);
+      updateKiroAnimation(dt);
+    }
+
+    render();
+    requestAnimationFrame(loop);
+  }
   requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
 
-// ------------------------------------------------------------
-// INPUT
-// ------------------------------------------------------------
+  // ------------------------------------------------------------
+  // INPUT HANDLING
+  // ------------------------------------------------------------
+  window.addEventListener("keydown", e => {
+    if (e.key === " " || e.key === "Enter") {
+      if (GameState.mode === "vn") {
+        if (isTyping) {
+          finishTypingInstantly();
+        } else {
+          advanceDialogue();
+        }
+      }
+    }
+    if (e.key.toLowerCase() === "e") {
+      if (GameState.mode === "map") {
+        tryInteract();
+      }
+    }
+  });
 
-window.addEventListener("keydown", e => {
-  if (e.key === " " || e.key === "Enter") {
-    if (GameState.mode === "vn") advanceDialogue();
+  // ------------------------------------------------------------
+  // OVERLAY
+  // ------------------------------------------------------------
+  function showOverlay(text) {
+    uiOverlayText.textContent = text;
+    uiOverlay.style.display = "flex";
   }
-  if (e.key.toLowerCase() === "e") {
-    if (GameState.mode === "map") tryInteract();
+
+  function hideOverlay() {
+    uiOverlay.style.display = "none";
   }
-});
 
-// ------------------------------------------------------------
-// OVERLAY
-// ------------------------------------------------------------
+  uiOverlayBtn.onclick = () => {
+    hideOverlay();
+    GameState.mode = "vn";
+    startDialogue(Scenes.intro);
+  };
 
-function showOverlay(text) {
-  uiOverlayText.textContent = text;
-  uiOverlay.style.display = "flex";
-}
-
-function hideOverlay() {
-  uiOverlay.style.display = "none";
-}
-
-uiOverlayBtn.onclick = () => {
-  hideOverlay();
-  GameState.mode = "vn";
-  GameState.currentSceneId = "intro";
-  GameState.currentLineIndex = 0;
-  startDialogue(Scenes.intro);
-};
-
-// ------------------------------------------------------------
-// INIT
-// ------------------------------------------------------------
-
-showOverlay(
-  "The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\nWASD / Arrows: Move\nE: Interact\nSPACE: Advance Dialogue"
-);
-
+  // ------------------------------------------------------------
+  // INIT
+  // ------------------------------------------------------------
+  showOverlay(
+    "The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\nWASD / Arrows: Move\nE: Interact\nSPACE: Finish / Advance Dialogue"
+  );
 </script>
 </body>
 </html>
