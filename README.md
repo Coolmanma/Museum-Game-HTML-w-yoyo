@@ -1,11 +1,12 @@
 This game had time and effort put in, please DO NOT steal anything inside of this game.
 
-  Without furthur ado, lets get started on the stats. This game is an offline HTML game, which means you can run index.html in your local browser.
+  Without furthur ado, lets get started on the stats. This game is an offline HTML game, which means you can run index.html in your local browser. This game holds a grudge against being run as a web app due to the sprites not being able to be yeilded.
 
 Creators:
 
   Yoyo - (Discord: yoyof30) Illustrator and idea maker
       Yuuzhang45@gmail.com
+
   Coolmanma (Discord: ThatOneDev/awesomegamer_021) Programmer
 
 
