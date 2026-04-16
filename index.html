@@ -41,7 +41,6 @@
       display: block;
     }
 
-    /* Dialogue box */
     #ui-dialogue {
       position: absolute;
       left: 0;
@@ -59,7 +58,6 @@
       opacity: 0;
     }
 
-    /* Slide + fade animation (0.6s) */
     @keyframes dialogueSlideFadeIn {
       from {
         transform: translateY(40px);
@@ -98,7 +96,6 @@
       text-align: right;
     }
 
-    /* Typing caret */
     .typing {
       border-right: 2px solid #ffd36b;
       animation: caretBlink 0.7s infinite;
@@ -110,7 +107,6 @@
       100% { border-color: transparent; }
     }
 
-    /* Overlay */
     #ui-overlay {
       position: absolute;
       inset: 0;
@@ -161,14 +157,12 @@
   <div id="game-container">
     <canvas id="game-canvas" width="800" height="600"></canvas>
 
-    <!-- Dialogue UI -->
     <div id="ui-dialogue">
       <div id="ui-name"></div>
       <div id="ui-text"></div>
       <div id="ui-hint">SPACE: finish / advance</div>
     </div>
 
-    <!-- Overlay -->
     <div id="ui-overlay">
       <div id="ui-overlay-inner">
         <div id="ui-overlay-text"></div>
@@ -181,9 +175,6 @@
 </div>
 
 <script>
-  // ------------------------------------------------------------
-  // DOM + CANVAS SETUP
-  // ------------------------------------------------------------
   const canvas = document.getElementById("game-canvas");
   const ctx = canvas.getContext("2d");
 
@@ -198,18 +189,15 @@
 
   const debugEl = document.getElementById("debug");
 
-  // ------------------------------------------------------------
-  // CHARACTER STYLES (nameplate colors)
-  // ------------------------------------------------------------
   const CharacterStyles = {
-    "???": { name: "???", color: "#e6d0bd" },          // Kiro early
+    "???": { name: "???", color: "#e6d0bd" },
     Narrator: { name: "Narrator", color: "#ffffff" },
     Kid: { name: "Kid", color: "#d0d0d0" },
     Father: { name: "Father", color: "#d0d0d0" },
     Doctor: { name: "Doctor", color: "#d0d0d0" },
-    Kiro: { name: "Kiro", color: "#e6d0bd" },          // later, if used
-    Tie: { name: "Tie", color: "#ff7266" },            // new Tie color
-    Dustworth: { name: "Mr. Morgan Dustworth", color: "#98f2e7" } // new Dustworth color
+    Kiro: { name: "Kiro", color: "#e6d0bd" },
+    Tie: { name: "Tie", color: "#ff7266" },
+    Dustworth: { name: "Mr. Morgan Dustworth", color: "#98f2e7" }
   };
 
   function applySpeakerStyle(speaker) {
@@ -225,42 +213,66 @@
     uiName.textContent = style.name;
   }
 
-  // ------------------------------------------------------------
-  // KIRO SPRITES (adjustable filenames)
-  // ------------------------------------------------------------
-  const KiroSprites = {
-    idle: [
-      "Assets/Kiro/kiro_idle_1.png",
-      "Assets/Kiro/kiro_idle_2.png"
-    ],
-    walk: [
-      "Assets/Kiro/kiro_walk_1.png",
-      "Assets/Kiro/kiro_walk_2.png"
-    ]
-  };
-
-  const KiroImages = {
-    idle: [],
-    walk: []
-  };
-
-  function loadKiroSprites() {
-    for (const frame of KiroSprites.idle) {
-      const img = new Image();
-      img.src = frame;
-      KiroImages.idle.push(img);
+  const PlaceholderSprites = {
+    idle: {
+      front: [
+        "Assets/Placeholder/Place_holder_idle_sprite.front.1.png",
+        "Assets/Placeholder/Place_holder_idle_sprite.front.2.png"
+      ],
+      back: [
+        "Assets/Placeholder/Place_holder_idle_sprite.back.1.png",
+        "Assets/Placeholder/Place_holder_idle_sprite.back.2.png"
+      ],
+      left: [
+        "Assets/Placeholder/Place_holder_idle_sprite.left.1.png",
+        "Assets/Placeholder/Place_holder_idle_sprite.left.2.png"
+      ],
+      right: [
+        "Assets/Placeholder/Place_holder_idle_sprite.right.1.png",
+        "Assets/Placeholder/Place_holder_idle_sprite.right.2.png"
+      ]
+    },
+    walk: {
+      front: [
+        "Assets/Placeholder/Place_holder_walk_sprite.front.1.png",
+        "Assets/Placeholder/Place_holder_walk_sprite.front.2.png"
+      ],
+      back: [
+        "Assets/Placeholder/Place_holder_walk_sprite.back.1.png",
+        "Assets/Placeholder/Place_holder_walk_sprite.back.2.png"
+      ],
+      left: [
+        "Assets/Placeholder/Place_holder_walk_sprite.left.1.png",
+        "Assets/Placeholder/Place_holder_walk_sprite.left.2.png",
+        "Assets/Placeholder/Place_holder_walk_sprite.left.3.png"
+      ],
+      right: [
+        "Assets/Placeholder/Place_holder_walk_sprite.right.1.png",
+        "Assets/Placeholder/Place_holder_walk_sprite.right.2.png",
+        "Assets/Placeholder/Place_holder_walk_sprite.right.3.png"
+      ]
     }
-    for (const frame of KiroSprites.walk) {
-      const img = new Image();
-      img.src = frame;
-      KiroImages.walk.push(img);
+  };
+
+  const PlaceholderImages = {
+    idle: { front: [], back: [], left: [], right: [] },
+    walk: { front: [], back: [], left: [], right: [] }
+  };
+
+  function loadPlaceholderSprites() {
+    for (const state of ["idle", "walk"]) {
+      for (const dir of ["front", "back", "left", "right"]) {
+        for (const path of PlaceholderSprites[state][dir]) {
+          const img = new Image();
+          img.src = path;
+          PlaceholderImages[state][dir].push(img);
+        }
+      }
     }
   }
-  loadKiroSprites();
 
-  // ------------------------------------------------------------
-  // INPUT STATE
-  // ------------------------------------------------------------
+  loadPlaceholderSprites();
+
   const keys = {};
   window.addEventListener("keydown", e => {
     keys[e.key.toLowerCase()] = true;
@@ -270,20 +282,20 @@
     keys[e.key.toLowerCase()] = false;
   });
 
-  // ------------------------------------------------------------
-  // GLOBAL GAME STATE
-  // ------------------------------------------------------------
   const GameState = {
-    mode: "overlay",   // 'overlay' | 'vn' | 'map'
+    mode: "overlay",
     mapId: "room_1",
     player: {
+      id: "kiro",
       x: 400,
       y: 360,
       size: 32,
       speed: 1.5,
       animState: "idle",
       animFrame: 0,
-      animTimer: 0
+      animTimer: 0,
+      dir: "front",
+      sprites: PlaceholderImages
     },
     flags: {}
   };
@@ -291,9 +303,6 @@
   const Maps = {};
   const Scenes = {};
 
-  // ------------------------------------------------------------
-  // MAPS
-  // ------------------------------------------------------------
   Maps.room_1 = {
     width: 800,
     height: 600,
@@ -302,7 +311,7 @@
       { x: 0, y: 0, w: 40, h: 600 },
       { x: 0, y: 560, w: 800, h: 40 },
       { x: 760, y: 0, w: 40, h: 600 },
-      { x: 360, y: 220, w: 80, h: 40 } // sarcophagus
+      { x: 360, y: 220, w: 80, h: 40 }
     ],
     npcs: [
       {
@@ -310,9 +319,12 @@
         speakerKey: "Tie",
         x: 420,
         y: 280,
-        w: 24,
-        h: 24,
-        color: "#ff7266",
+        size: 32,
+        animState: "idle",
+        animFrame: 0,
+        animTimer: 0,
+        dir: "front",
+        sprites: PlaceholderImages,
         interact: () => {
           startDialogue({
             lines: [
@@ -331,9 +343,12 @@
         speakerKey: "Dustworth",
         x: 200,
         y: 200,
-        w: 24,
-        h: 24,
-        color: "#98f2e7",
+        size: 32,
+        animState: "idle",
+        animFrame: 0,
+        animTimer: 0,
+        dir: "front",
+        sprites: PlaceholderImages,
         interact: () => {
           startDialogue({
             lines: [
@@ -360,9 +375,6 @@
     ]
   };
 
-  // ------------------------------------------------------------
-  // INTRO SCENE (your new script)
-  // ------------------------------------------------------------
   Scenes.intro = {
     lines: [
       { speaker: "???", text: "(...huh?\nWhy is everything so... bright?)" },
@@ -429,9 +441,6 @@
     }
   };
 
-  // ------------------------------------------------------------
-  // DIALOGUE SYSTEM
-  // ------------------------------------------------------------
   let activeDialogue = null;
   let typingInterval = null;
   let isTyping = false;
@@ -509,9 +518,6 @@
     renderDialogueLine();
   }
 
-  // ------------------------------------------------------------
-  // COLLISION
-  // ------------------------------------------------------------
   function collides(x, y, w, h, walls) {
     for (const wall of walls) {
       if (
@@ -526,9 +532,6 @@
     return false;
   }
 
-  // ------------------------------------------------------------
-  // MOVEMENT (normalized, pixel-snappy)
-  // ------------------------------------------------------------
   function movePlayer(dt) {
     const p = GameState.player;
     const map = Maps[GameState.mapId];
@@ -544,6 +547,11 @@
       p.animState = "idle";
       return;
     }
+
+    if (dy < 0) p.dir = "back";
+    else if (dy > 0) p.dir = "front";
+    if (dx < 0) p.dir = "left";
+    else if (dx > 0) p.dir = "right";
 
     const len = Math.hypot(dx, dy);
     dx = Math.round((dx / len) * p.speed);
@@ -562,65 +570,63 @@
     p.animState = "walk";
   }
 
-  // ------------------------------------------------------------
-  // KIRO ANIMATION
-  // ------------------------------------------------------------
-  function updateKiroAnimation(dt) {
-    const p = GameState.player;
-
+  function updateCharacterAnimation(char, dt) {
+    const sprites = char.sprites;
     const idleSpeed = 0.6;
     const walkSpeed = 0.15;
 
-    p.animTimer += dt;
+    char.animTimer += dt;
 
-    if (p.animState === "idle") {
-      if (p.animTimer >= idleSpeed) {
-        p.animTimer = 0;
-        p.animFrame = (p.animFrame + 1) % KiroImages.idle.length;
-      }
-    }
+    const state = char.animState;
+    const dir = char.dir;
+    const frames = sprites[state][dir];
 
-    if (p.animState === "walk") {
-      if (p.animTimer >= walkSpeed) {
-        p.animTimer = 0;
-        p.animFrame = (p.animFrame + 1) % KiroImages.walk.length;
-      }
+    if (!frames || frames.length === 0) return;
+
+    const speed = state === "idle" ? idleSpeed : walkSpeed;
+
+    if (char.animTimer >= speed) {
+      char.animTimer = 0;
+      char.animFrame = (char.animFrame + 1) % frames.length;
     }
   }
 
-  function drawKiro() {
-    const p = GameState.player;
-
-    let img;
-    if (p.animState === "idle") {
-      img = KiroImages.idle[p.animFrame] || KiroImages.idle[0];
-    } else {
-      img = KiroImages.walk[p.animFrame] || KiroImages.walk[0];
+  function updateAnimations(dt) {
+    updateCharacterAnimation(GameState.player, dt);
+    const map = Maps[GameState.mapId];
+    for (const npc of map.npcs) {
+      updateCharacterAnimation(npc, dt);
     }
+  }
+
+  function drawCharacter(char) {
+    const sprites = char.sprites;
+    const state = char.animState;
+    const dir = char.dir;
+    const frames = sprites[state][dir];
+
+    let img = frames && frames[char.animFrame] ? frames[char.animFrame] : null;
 
     if (img && img.complete) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(
         img,
-        p.x - p.size / 2,
-        p.y - p.size / 2,
-        p.size,
-        p.size
+        char.x - char.size / 2,
+        char.y - char.size / 2,
+        char.size,
+        char.size
       );
     } else {
       ctx.fillStyle = "#d9c27a";
       ctx.fillRect(
-        p.x - p.size / 2,
-        p.y - p.size / 2,
-        p.size,
-        p.size
+        char.x - char.size / 2,
+        char.y - char.size / 2,
+        char.size,
+        char.size
       );
     }
   }
 
-  // ------------------------------------------------------------
-  // INTERACTION
-  // ------------------------------------------------------------
   function tryInteract() {
     const map = Maps[GameState.mapId];
     const p = GameState.player;
@@ -634,9 +640,6 @@
     }
   }
 
-  // ------------------------------------------------------------
-  // RENDERING
-  // ------------------------------------------------------------
   function renderMap() {
     const map = Maps[GameState.mapId];
 
@@ -660,17 +663,12 @@
     ctx.strokeStyle = "#cfa96a";
     ctx.strokeRect(360, 220, 80, 40);
 
-    for (const npc of map.npcs) {
-      ctx.fillStyle = npc.color;
-      ctx.fillRect(
-        npc.x - npc.w / 2,
-        npc.y - npc.h / 2,
-        npc.w,
-        npc.h
-      );
+    const mapData = Maps[GameState.mapId];
+    for (const npc of mapData.npcs) {
+      drawCharacter(npc);
     }
 
-    drawKiro();
+    drawCharacter(GameState.player);
   }
 
   function render() {
@@ -686,9 +684,6 @@
     debugEl.textContent = `mode: ${GameState.mode}`;
   }
 
-  // ------------------------------------------------------------
-  // MAIN LOOP
-  // ------------------------------------------------------------
   let last = performance.now();
   function loop(now) {
     const dt = (now - last) / 1000;
@@ -696,7 +691,7 @@
 
     if (GameState.mode === "map") {
       movePlayer(dt);
-      updateKiroAnimation(dt);
+      updateAnimations(dt);
     }
 
     render();
@@ -704,9 +699,6 @@
   }
   requestAnimationFrame(loop);
 
-  // ------------------------------------------------------------
-  // INPUT HANDLING
-  // ------------------------------------------------------------
   window.addEventListener("keydown", e => {
     if (e.key === " " || e.key === "Enter") {
       if (GameState.mode === "vn") {
@@ -724,9 +716,6 @@
     }
   });
 
-  // ------------------------------------------------------------
-  // OVERLAY
-  // ------------------------------------------------------------
   function showOverlay(text) {
     uiOverlayText.textContent = text;
     uiOverlay.style.display = "flex";
@@ -741,13 +730,60 @@
     GameState.mode = "vn";
     startDialogue(Scenes.intro);
   };
+// ------------------------------------------------------------
+// PRELOAD ALL PLACEHOLDER SPRITES BEFORE GAME START
+// ------------------------------------------------------------
 
-  // ------------------------------------------------------------
-  // INIT
-  // ------------------------------------------------------------
-  showOverlay(
-    "The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\nWASD / Arrows: Move\nE: Interact\nSPACE: Finish / Advance Dialogue"
-  );
+function preloadImages(imagePaths) {
+  return new Promise(resolve => {
+    let loaded = 0;
+    const total = imagePaths.length;
+
+    for (const path of imagePaths) {
+      const img = new Image();
+      img.onload = () => {
+        loaded++;
+        if (loaded >= total) resolve();
+      };
+      img.onerror = () => {
+        console.warn("Failed to load:", path);
+        loaded++;
+        if (loaded >= total) resolve();
+      };
+      img.src = path;
+    }
+  });
+}
+
+  function getAllPlaceholderPaths() {
+    const list = [];
+
+    for (const state in PlaceholderSprites) {
+      for (const dir in PlaceholderSprites[state]) {
+        for (const path of PlaceholderSprites[state][dir]) {
+          list.push(path);
+        }
+      }
+    }
+
+    return list;
+  }
+
+  async function startGame() {
+    const allPaths = getAllPlaceholderPaths();
+    await preloadImages(allPaths);
+
+    // AFTER preload, load them into Image() objects
+    loadPlaceholderSprites();
+
+    // Start game normally
+    showOverlay(
+      "The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\nWASD / Arrows: Move\nE: Interact\nSPACE: Finish / Advance Dialogue"
+    );
+  }
+
+  startGame();
+
 </script>
 </body>
 </html>
