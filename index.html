@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8" />
 <title>Museum Game</title>
+
 <style>
   html, body {
     margin: 0;
     padding: 0;
     background: #111;
-    color: #eee;
-    font-family: system-ui, sans-serif;
     height: 100%;
     overflow: hidden;
+    font-family: system-ui, sans-serif;
   }
 
   #game-root {
@@ -20,72 +20,64 @@
     width: 100vw;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle at top, #333 0, #111 60%);
   }
 
   #game-container {
     position: relative;
-    width: 800px;
-    height: 600px;
+    width: 1280px;
+    height: 720px;
     background: #000;
-    border: 2px solid #555;
-    box-shadow: 0 0 20px #000;
     overflow: hidden;
   }
 
   #game-canvas {
-    background: #1b1b1b;
-    image-rendering: pixelated;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
     width: 100%;
     height: 100%;
+    image-rendering: pixelated;
+    background: #1b1b1b;
     display: block;
+  }
+
+  #ui-dialogue-bg {
+    position: absolute;
+    inset: 0;
+    background: black;
+    display: none;
+    z-index: 9;
   }
 
   #ui-dialogue {
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: 180px;
-    background: rgba(0, 0, 0, 0.9);
-    border-top: 2px solid #555;
-    padding: 10px 16px;
-    box-sizing: border-box;
+    left: 0; right: 0; bottom: 0;
+    height: 220px;
+    background: rgba(0,0,0,0.9);
+    padding: 18px 22px;
     display: none;
     flex-direction: column;
-    gap: 6px;
-    transform: translateY(40px);
-    opacity: 0;
-  }
-
-  @keyframes dialogueSlideFadeIn {
-    from { transform: translateY(40px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-
-  #ui-dialogue.show {
-    animation: dialogueSlideFadeIn 0.6s ease-out forwards;
+    z-index: 10;
+    box-sizing: border-box;
   }
 
   #ui-name {
     font-weight: bold;
-    padding: 2px 8px;
-    border-radius: 4px;
-    display: inline-block;
-    max-width: 60%;
-    text-shadow: 0 0 4px #000;
+    margin-bottom: 8px;
+    color: #ffffff;
   }
 
   #ui-text {
-    font-size: 15px;
-    line-height: 1.4;
     white-space: pre-wrap;
-    margin-top: 4px;
+    font-size: 18px;
+    min-height: 120px;
+    color: #ffffff;
   }
 
   #ui-hint {
     margin-top: auto;
-    font-size: 12px;
+    font-size: 14px;
     color: #aaa;
     text-align: right;
   }
@@ -93,61 +85,57 @@
   #ui-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0,0,0,0.7);
     display: none;
+    z-index: 8;
     align-items: center;
     justify-content: center;
-    color: #eee;
-    font-size: 18px;
+    color: white;
     text-align: center;
     padding: 20px;
     box-sizing: border-box;
   }
 
-  #ui-overlay-inner {
-    max-width: 520px;
-  }
-
-  #ui-overlay-text {
-    margin-bottom: 16px;
-    white-space: pre-wrap;
-  }
-
-  #ui-overlay-btn {
-    padding: 6px 14px;
+  #ui-overlay button {
+    margin-top: 16px;
+    padding: 8px 16px;
     background: #333;
     color: #eee;
     border: 1px solid #777;
     cursor: pointer;
   }
 
-  #ui-overlay-btn:hover {
+  #ui-overlay button:hover {
     background: #444;
   }
 
   #debug {
     position: absolute;
-    top: 4px;
-    left: 6px;
-    font-size: 11px;
+    top: 5px;
+    left: 5px;
     color: #888;
+    font-size: 12px;
+    z-index: 20;
     pointer-events: none;
   }
 </style>
 </head>
+
 <body>
 <div id="game-root">
   <div id="game-container">
-    <canvas id="game-canvas" width="800" height="600"></canvas>
+    <canvas id="game-canvas" width="1280" height="720"></canvas>
+
+    <div id="ui-dialogue-bg"></div>
 
     <div id="ui-dialogue">
       <div id="ui-name"></div>
       <div id="ui-text"></div>
-      <div id="ui-hint">SPACE: finish / advance</div>
+      <div id="ui-hint">SPACE to continue</div>
     </div>
 
     <div id="ui-overlay">
-      <div id="ui-overlay-inner">
+      <div>
         <div id="ui-overlay-text"></div>
         <button id="ui-overlay-btn">Start</button>
       </div>
@@ -159,12 +147,14 @@
 
 <script>
 /* ============================================================
-   CANVAS + UI
+   BASIC SETUP
 ============================================================ */
+
 const canvas = document.getElementById("game-canvas");
 const ctx = canvas.getContext("2d");
 
 const uiDialogue = document.getElementById("ui-dialogue");
+const uiDialogueBG = document.getElementById("ui-dialogue-bg");
 const uiName = document.getElementById("ui-name");
 const uiText = document.getElementById("ui-text");
 const uiOverlay = document.getElementById("ui-overlay");
@@ -172,29 +162,19 @@ const uiOverlayText = document.getElementById("ui-overlay-text");
 const uiOverlayBtn = document.getElementById("ui-overlay-btn");
 const debugEl = document.getElementById("debug");
 
-/* ============================================================
-   CHARACTER COLORS
-============================================================ */
-const CharacterStyles = {
-  "???": { name: "???", color: "#e6d0bd" },
-  Narrator: { name: "Narrator", color: "#ffffff" },
-  Kid: { name: "Kid", color: "#d0d0d0" },
-  Father: { name: "Father", color: "#d0d0d0" },
-  Doctor: { name: "Doctor", color: "#d0d0d0" },
-  Tie: { name: "Tie", color: "#ff7266" },
-  Dustworth: { name: "Mr. Dustworth", color: "#c998f2" }
-};
-
-function applySpeakerStyle(speaker) {
-  const style = CharacterStyles[speaker];
-  uiName.style.backgroundColor = style ? style.color : "#444";
-  uiName.style.color = "#111";
-  uiName.textContent = style ? style.name : speaker;
-}
+const keys = {};
+window.addEventListener("keydown", e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === " ") e.preventDefault();
+});
+window.addEventListener("keyup", e => {
+  keys[e.key.toLowerCase()] = false;
+});
 
 /* ============================================================
-   PLACEHOLDER SPRITES
+   PLACEHOLDER CHARACTER SPRITES
 ============================================================ */
+
 const PlaceholderSprites = {
   idle: {
     front: [
@@ -253,7 +233,6 @@ async function loadPlaceholderSprites() {
           img.onerror = resolve;
         });
         img.src = path;
-
         PlaceholderImages[state][dir].push(img);
         loadPromises.push(p);
       }
@@ -264,188 +243,234 @@ async function loadPlaceholderSprites() {
 }
 
 /* ============================================================
-   INPUT
+   TILE SYSTEM — PER-TILE IMAGES
 ============================================================ */
-const keys = {};
-window.addEventListener("keydown", e => {
-  keys[e.key.toLowerCase()] = true;
-  if (e.key === " ") e.preventDefault();
-});
-window.addEventListener("keyup", e => {
-  keys[e.key.toLowerCase()] = false;
-});
+
+const TileTypes = {
+  "w": {
+    name: "Wall",
+    canCollide: true,
+    canTouch: false,
+    minimapColor: "#444444",
+    image: "Assets/Tiles/wall.png"
+  },
+  "f": {
+    name: "Floor",
+    canCollide: false,
+    canTouch: true,
+    minimapColor: "#777777",
+    image: "Assets/Tiles/floor.png"
+  },
+  "p": {
+    name: "PlayerSpawn",
+    canCollide: false,
+    isSpawn: true,
+    minimapColor: "#777777",
+    image: "Assets/Tiles/floor.png"
+  },
+  "n": {
+    name: "NPC",
+    canCollide: false,
+    isNPC: true,
+    minimapColor: "#9999ff",
+    image: "Assets/Tiles/floor.png"
+  }
+};
+
+const TileImages = {};
+
+function loadTileImages() {
+  const promises = [];
+  for (const key in TileTypes) {
+    const path = TileTypes[key].image;
+    const img = new Image();
+    TileImages[key] = img;
+    const p = new Promise(resolve => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
+    img.src = path;
+    promises.push(p);
+  }
+  return Promise.all(promises);
+}
+
+// simple small map (you can expand later)
+const museumTable = [
+  ["w","w","w","w","w","w","w","w","w","w"],
+  ["w","f","f","f","f","f","f","f","f","w"],
+  ["w","f","p","f","f","f","f","f","n","w"],
+  ["w","f","f","f","f","f","f","f","f","w"],
+  ["w","w","w","w","w","w","w","w","w","w"]
+];
+
+function generateMapFromTable(table, tileSize = 64) {
+  const rows = table.length;
+  const cols = table[0].length;
+
+  const walls = [];
+  const tiles = [];
+  const npcs = [];
+  let playerSpawn = { x: tileSize, y: tileSize };
+
+  for (let y = 0; y < rows; y++) {
+    tiles[y] = [];
+    for (let x = 0; x < cols; x++) {
+      const symbol = table[y][x];
+      tiles[y][x] = symbol;
+
+      const def = TileTypes[symbol] || TileTypes["f"];
+      const worldX = x * tileSize;
+      const worldY = y * tileSize;
+      const centerX = worldX + tileSize / 2;
+      const centerY = worldY + tileSize / 2;
+
+      if (def.canCollide) {
+        walls.push({ x: worldX, y: worldY, w: tileSize, h: tileSize });
+      }
+
+      if (def.isSpawn) {
+        playerSpawn = { x: centerX, y: centerY };
+      }
+
+      if (def.isNPC) {
+        npcs.push({
+          id: "Mr. Dustworth",
+          x: centerX,
+          y: centerY,
+          size: 48,
+          animState: "idle",
+          animFrame: 0,
+          animTimer: 0,
+          dir: "front",
+          sprites: PlaceholderImages
+        });
+      }
+    }
+  }
+
+  return {
+    tileSize,
+    rows,
+    cols,
+    tiles,
+    walls,
+    npcs,
+    playerSpawn,
+    width: cols * tileSize,
+    height: rows * tileSize
+  };
+}
 
 /* ============================================================
-   GAME STATE
+   GAME STATE + CAMERA
 ============================================================ */
+
 const GameState = {
   mode: "overlay",
-  mapId: "room_1",
+  map: null,
   player: {
-    x: 400,
-    y: 360,
-    size: 32,
-    speed: 1.5,
+    x: 0,
+    y: 0,
+    size: 48,
+    speed: 2.2,
+    dir: "front",
     animState: "idle",
     animFrame: 0,
     animTimer: 0,
-    dir: "front",
     sprites: PlaceholderImages
-  }
+  },
+  npcs: [],
+  camera: { x: 0, y: 0 }
 };
+
+function updateCamera() {
+  const p = GameState.player;
+  const map = GameState.map;
+  if (!map) return;
+
+  const halfW = canvas.width / 2;
+  const halfH = canvas.height / 2;
+
+  let camX = p.x - halfW;
+  let camY = p.y - halfH;
+
+  // no clamping for now (map is smaller than screen)
+  GameState.camera.x = camX;
+  GameState.camera.y = camY;
+}
 
 /* ============================================================
-   MAPS + NPCs
+   DIALOGUE STYLES
 ============================================================ */
-const Maps = {};
 
-Maps.room_1 = {
-  width: 800,
-  height: 600,
-  walls: [
-    { x: 0, y: 0, w: 800, h: 40 },
-    { x: 0, y: 0, w: 40, h: 600 },
-    { x: 0, y: 560, w: 800, h: 40 },
-    { x: 760, y: 0, w: 40, h: 600 },
-    { x: 360, y: 220, w: 80, h: 40 }
-  ],
-  npcs: [
-    {
-      id: "tie",
-      x: 420,
-      y: 280,
-      size: 32,
-      animState: "idle",
-      animFrame: 0,
-      animTimer: 0,
-      dir: "front",
-      sprites: PlaceholderImages
-    },
-    {
-      id: "dustworth",
-      x: 200,
-      y: 200,
-      size: 32,
-      animState: "idle",
-      animFrame: 0,
-      animTimer: 0,
-      dir: "front",
-      sprites: PlaceholderImages
-    }
-  ]
+const CharacterStyles = {
+  "???": { color: "#e6d0bd" },
+  "Narrator": { color: "#ffffff" },
+  "Kid": { color: "#d0d0d0" },
+  "Father": { color: "#d0d0d0" },
+  "Mr. Dustworth": { color: "#c998f2" },
+  "Mr. Morgan Dustworth": { color: "#c998f2" },
+  "Doctor": { color: "#d0d0d0" },
+  "Tie": { color: "#ff7266" }
 };
 
-/* ============================================================
-   DIALOGUE SCENE
-============================================================ */
-const Scenes = {};
-
-Scenes.intro = {
-  lines: [
-    { speaker: "???", text: "(…huh?\nWhy is everything so… bright?)" },
-
-    { speaker: "Narrator", text:
-      "You wake up inside a glass case.\n" +
-      "Your joints creak. Your bandages itch.\n" +
-      "You are very, very dead.\n" +
-      "And somehow not."
-    },
-
-    { speaker: "Kid", text: "Dad, look! It’s a mummy!" },
-
-    { speaker: "Narrator", text:
-      "You look at the kid talking ever so loudly and eagerly.\n" +
-      "The kid then freezes up, shocked and starts…\n\nCrying?"
-    },
-
-    { speaker: "Kid", text: "WAHHHHHH I-I-I-I-IT MOVED!!" },
-
-    { speaker: "???", text: "*...*" },
-
-    { speaker: "Narrator", text: "The dad steps closer to the kid and drags them off." },
-
-    { speaker: "Father", text:
-      "Shh shh shhh, stop crying… haha… it’s okay! See?\n" +
-      "It’s not moving… right Mr. Dustworth?"
-    },
-
-    { speaker: "Dustworth", text:
-      "Oh? Kids these days surely have a bright imagination."
-    },
-
-    { speaker: "Narrator", text:
-      "Mr. Dustworth walks over to look at your case.\n" +
-      "He looks a bit surprised by you, being an artifact, blinking."
-    },
-
-    { speaker: "Dustworth", text: "It’s truly nothing… hehe." },
-
-    { speaker: "Narrator", text:
-      "Mr. Dustworth assures the father as he dials a number on his phone.\n" +
-      "You close your eyes, a bit too tired yet too energetic."
-    },
-
-    { speaker: "Doctor", text:
-      "Ah, I see. You're finally awake.\n" +
-      "So you're unable to do several things like being in contact with water,\n" +
-      "sleep for long periods of time, sleep for short periods of time,\n" +
-      "and you’ll need oil to keep your joints moving—"
-    },
-
-    { speaker: "Tie", text:
-      "*scoot scoot*\n" +
-      "Ugh, it’s been a week and this f*cker still hasn’t fed me…"
-    },
-
-    { speaker: "Narrator", text:
-      "An annoyed voice complains.\n" +
-      "It stops scooting."
-    }
-  ],
-  onComplete: () => {
-    GameState.mode = "map";
-    hideDialogue();
-  }
-};
+function applySpeakerStyle(name) {
+  const style = CharacterStyles[name];
+  uiName.style.color = style ? style.color : "#ffffff";
+}
 
 /* ============================================================
    DIALOGUE SYSTEM
 ============================================================ */
+
 let currentScene = null;
 let currentLine = 0;
 let typing = false;
 let typingIndex = 0;
-let typingSpeed = 20;
+let typingSpeed = 28;
 
 function showDialogue(scene) {
   currentScene = scene;
   currentLine = 0;
+
+  uiDialogueBG.style.display = "block";
   uiDialogue.style.display = "flex";
-  uiDialogue.classList.add("show");
+
   showLine();
 }
 
 function hideDialogue() {
   uiDialogue.style.display = "none";
-  uiDialogue.classList.remove("show");
+  uiDialogueBG.style.display = "none";
 }
 
 function showLine() {
   const line = currentScene.lines[currentLine];
+
   applySpeakerStyle(line.speaker);
+  uiName.textContent = line.speaker;
+
   uiText.textContent = "";
   typing = true;
   typingIndex = 0;
+
   typeText(line.text);
 }
 
 function typeText(text) {
   if (!typing) return;
+
+  const ch = text[typingIndex];
   uiText.textContent = text.slice(0, typingIndex);
   typingIndex++;
 
+  let delay = typingSpeed;
+  if (ch === "." || ch === "!" || ch === "?") delay += 200;
+  if (ch === "\n") delay += 250;
+
   if (typingIndex <= text.length) {
-    setTimeout(() => typeText(text), typingSpeed);
+    setTimeout(() => typeText(text), delay);
   } else {
     typing = false;
   }
@@ -459,60 +484,148 @@ function advanceDialogue() {
   }
 
   currentLine++;
+
   if (currentLine >= currentScene.lines.length) {
-    currentScene.onComplete();
+    const done = currentScene.onComplete;
+    hideDialogue();
+    currentScene = null;
+    if (done) done();
     return;
   }
 
   showLine();
 }
 
-/* ============================================================
-   COLLISION
-============================================================ */
-function collides(x, y, w, h, walls) {
-  for (const wall of walls) {
-    if (
-      x < wall.x + wall.w &&
-      x + w > wall.x &&
-      y < wall.y + wall.h &&
-      y + h > wall.y
-    ) {
-      return true;
+const Scenes = {
+  intro: {
+    lines: [
+      { speaker: "???", text: "(…huh?\nWhy is everything so… bright?)" },
+
+      { speaker: "Narrator", text:
+        "You wake up inside a glass case.\n" +
+        "Your joints creak. Your bandages itch.\n" +
+        "You are very, very dead.\n" +
+        "And somehow not."
+      },
+
+      { speaker: "Kid", text: "Dad, look! It’s a mummy!" },
+
+      { speaker: "Narrator", text:
+        "You look at the kid talking ever so loudly and eagerly.\n" +
+        "The kid then freezes up, shocked and starts…\n\n" +
+        "Crying?"
+      },
+
+      { speaker: "Kid", text: "WAHHHHHH I-I-I-I-IT MOVED!!" },
+
+      { speaker: "???", text: "*...*" },
+
+      { speaker: "Narrator", text: "The dad steps closer to the kid and drags him off." },
+
+      { speaker: "Father", text:
+        "Shh shh shhh, stop crying… haha… it’s okay! See?\n" +
+        "It’s not moving… right Mr. Dustworth?"
+      },
+
+      { speaker: "Mr. Dustworth", text:
+        "Oh? Kids these days surely have a bright imagination."
+      },
+
+      { speaker: "Narrator", text:
+        "Mr Dustworth walks over to look at your case.\n" +
+        "He looks a bit surprised by you, being an artifact, blinking."
+      },
+
+      { speaker: "Mr. Dustworth", text: "It’s truly nothing… hehe" },
+
+      { speaker: "Narrator", text:
+        "Mr. Dustworth assures the father as he dials a number on his phone.\n" +
+        "You close your eyes, a bit too tired yet too energetic."
+      },
+
+      { speaker: "Doctor", text:
+        "Ah, I see, you’re finally awake.\n" +
+        "So you’re unable to do several things like being in contact with water,\n" +
+        "sleeping for long periods of time, or sleeping for short periods."
+      },
+
+      { speaker: "Mr. Morgan Dustworth", text:
+        "Hello! My name is Morgan Dustworth — but please, call me Morgan.\n" +
+        "I’m so delighted you’re here."
+      },
+
+      { speaker: "Mr. Morgan Dustworth", text:
+        "You look like someone with tremendous potential.\n" +
+        "The kind of potential that keeps the lights on."
+      },
+
+      { speaker: "???", text:
+        "Is that… a compliment or a threat?"
+      },
+
+      { speaker: "Mr. Morgan Dustworth", text:
+        "Why not both?\n" +
+        "Think of yourself as a valuable… asset."
+      }
+    ],
+
+    onComplete: () => {
+      GameState.mode = "map";
     }
+  }
+};
+
+window.addEventListener("keydown", e => {
+  if (e.key === " " && GameState.mode === "dialogue") {
+    advanceDialogue();
+  }
+});
+
+/* ============================================================
+   INPUT (E INTERACT)
+============================================================ */
+
+window.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "e" && GameState.mode === "map") {
+    tryInteract();
+  }
+});
+
+/* ============================================================
+   COLLISION + MOVEMENT + ANIMATION
+============================================================ */
+
+function collidesRect(x, y, w, h, rects) {
+  for (const r of rects) {
+    if (
+      x < r.x + r.w &&
+      x + w > r.x &&
+      y < r.y + r.h &&
+      y + h > r.y
+    ) return true;
   }
   return false;
 }
 
-function collidesWithNPC(x, y, size, npcs) {
-  for (const npc of npcs) {
-    const half = size / 2;
-    const nHalf = npc.size / 2;
+function updateCharacterAnimation(char, dt) {
+  const frames = char.sprites[char.animState][char.dir];
+  if (!frames || frames.length === 0) return;
 
-    if (
-      x + half > npc.x - nHalf &&
-      x - half < npc.x + nHalf &&
-      y + half > npc.y - nHalf &&
-      y - half < npc.y + nHalf
-    ) {
-      return true;
-    }
+  char.animTimer += dt;
+  const interval = (char.animState === "idle") ? 450 : 200;
+
+  if (char.animTimer >= interval) {
+    char.animTimer = 0;
+    char.animFrame = (char.animFrame + 1) % frames.length;
   }
-  return false;
 }
 
-/* ============================================================
-   MOVEMENT + ANIMATION
-============================================================ */
 function movePlayer(dt) {
   const p = GameState.player;
-  const map = Maps[GameState.mapId];
+  const map = GameState.map;
+  if (!map) return;
 
-  const prevDir = p.dir;
-  const prevState = p.animState;
-
-  let dx = 0;
-  let dy = 0;
+  let dx = 0, dy = 0;
 
   if (keys["w"] || keys["arrowup"]) dy -= 1;
   if (keys["s"] || keys["arrowdown"]) dy += 1;
@@ -532,123 +645,207 @@ function movePlayer(dt) {
 
   p.animState = (dx !== 0 || dy !== 0) ? "walk" : "idle";
 
-  if (p.dir !== prevDir || p.animState !== prevState) {
-    p.animFrame = 0;
-    p.animTimer = 0;
-  }
-
-  const npcs = map.npcs;
+  const half = p.size / 2;
 
   const newX = p.x + dx;
-  if (
-    !collides(newX - p.size/2, p.y - p.size/2, p.size, p.size, map.walls) &&
-    !collidesWithNPC(newX, p.y, p.size, npcs)
-  ) {
+  if (!collidesRect(newX - half, p.y - half, p.size, p.size, map.walls)) {
     p.x = newX;
   }
 
   const newY = p.y + dy;
-  if (
-    !collides(p.x - p.size/2, newY - p.size/2, p.size, p.size, map.walls) &&
-    !collidesWithNPC(p.x, newY, p.size, npcs)
-  ) {
+  if (!collidesRect(p.x - half, newY - half, p.size, p.size, map.walls)) {
     p.y = newY;
   }
 
   updateCharacterAnimation(p, dt);
 }
 
-function updateCharacterAnimation(char, dt) {
-  char.animTimer += dt;
-  const frames = char.sprites[char.animState][char.dir];
+/* ============================================================
+   NPC INTERACTION
+============================================================ */
 
-  if (char.animTimer >= 200) {
-    char.animTimer = 0;
-    char.animFrame = (char.animFrame + 1) % frames.length;
+function tryInteract() {
+  const p = GameState.player;
+  const npcs = GameState.npcs || [];
+  let closest = null;
+  let closestDist = 9999;
+
+  for (const npc of npcs) {
+    const d = Math.hypot(p.x - npc.x, p.y - npc.y);
+    if (d < 64 && d < closestDist) {
+      closestDist = d;
+      closest = npc;
+    }
+  }
+
+  if (closest) {
+    showDialogue({
+      lines: [
+        { speaker: closest.id || "NPC", text: "Hey. Placeholder dialogue." }
+      ],
+      onComplete: () => { GameState.mode = "map"; }
+    });
+    GameState.mode = "dialogue";
   }
 }
 
-function drawCharacter(char) {
-  const img = char.sprites[char.animState][char.dir][char.animFrame];
-  if (!img || !img.complete) return;
-
-  const half = char.size / 2;
-  ctx.drawImage(
-    img,
-    Math.round(char.x - half),
-    Math.round(char.y - half),
-    char.size,
-    char.size
-  );
-}
-
 /* ============================================================
-   INTERACTION PROMPT
+   RENDERING (MAP + CHARACTERS) WITH CAMERA
 ============================================================ */
-let showInteractPrompt = false;
-let interactX = 0;
-let interactY = 0;
 
-function updateInteractPrompt() {
-  const p = GameState.player;
-  const npcs = Maps[GameState.mapId].npcs;
+function renderMap() {
+  const map = GameState.map;
+  if (!map) {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
 
-  showInteractPrompt = false;
+  const ts = map.tileSize;
+  const cam = GameState.camera;
 
-  for (const npc of npcs) {
-    const dist = Math.hypot(p.x - npc.x, p.y - npc.y);
-    if (dist < 50) {
-      showInteractPrompt = true;
-      interactX = npc.x;
-      interactY = npc.y;
-      return;
+  for (let y = 0; y < map.rows; y++) {
+    for (let x = 0; x < map.cols; x++) {
+      const symbol = map.tiles[y][x];
+      const def = TileTypes[symbol] || TileTypes["f"];
+      const worldX = x * ts;
+      const worldY = y * ts;
+
+      const sx = worldX - cam.x;
+      const sy = worldY - cam.y;
+
+      const img = TileImages[symbol];
+      if (img && img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, sx, sy, ts, ts);
+      } else {
+        ctx.fillStyle = "#222";
+        ctx.fillRect(sx, sy, ts, ts);
+      }
+
+      if (def.canCollide) {
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(sx, sy, ts, ts);
+      }
     }
   }
 }
 
-/* ============================================================
-   RENDERING
-============================================================ */
-function renderMap() {
-  const map = Maps[GameState.mapId];
+function drawCharacter(char) {
+  const frames = char.sprites[char.animState][char.dir];
+  const img = frames[char.animFrame];
+  if (!img || !img.complete || img.naturalWidth === 0) return;
 
-  ctx.fillStyle = "#222";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const cam = GameState.camera;
+  const half = char.size / 2;
 
-  ctx.fillStyle = "#444";
-  for (const wall of map.walls) {
-    ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+  if (char === GameState.player) {
+    const sx = Math.round(canvas.width / 2 - half);
+    const sy = Math.round(canvas.height / 2 - half);
+    ctx.drawImage(img, sx, sy, char.size, char.size);
+  } else {
+    const sx = Math.round(char.x - half - cam.x);
+    const sy = Math.round(char.y - half - cam.y);
+    ctx.drawImage(img, sx, sy, char.size, char.size);
   }
+}
 
-  for (const npc of map.npcs) {
+function renderNPCs() {
+  const npcs = GameState.npcs || [];
+  for (const npc of npcs) {
     updateCharacterAnimation(npc, 16);
     drawCharacter(npc);
   }
+}
 
+function renderPlayer() {
   drawCharacter(GameState.player);
+}
 
-  if (showInteractPrompt) {
-    ctx.fillStyle = "white";
-    ctx.font = "16px sans-serif";
-    ctx.fillText("E to interact", interactX - 40, interactY - 40);
+/* ============================================================
+   MINIMAP
+============================================================ */
+
+function renderMinimap() {
+  const map = GameState.map;
+  if (!map) return;
+
+  const mmSize = 180;
+  const mmX = canvas.width - mmSize - 20;
+  const mmY = 20;
+
+  const scale = mmSize / Math.max(map.width, map.height);
+
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(mmX, mmY, mmSize, mmSize);
+
+  for (let y = 0; y < map.rows; y++) {
+    for (let x = 0; x < map.cols; x++) {
+      const symbol = map.tiles[y][x];
+      const def = TileTypes[symbol] || TileTypes["f"];
+
+      const worldX = x * map.tileSize;
+      const worldY = y * map.tileSize;
+
+      const sx = mmX + worldX * scale;
+      const sy = mmY + worldY * scale;
+
+      ctx.fillStyle = def.minimapColor || "#555555";
+      ctx.fillRect(sx, sy, map.tileSize * scale, map.tileSize * scale);
+    }
+  }
+
+  const px = mmX + GameState.player.x * scale;
+  const py = mmY + GameState.player.y * scale;
+
+  ctx.fillStyle = "#00ffea";
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  for (const npc of GameState.npcs) {
+    const dx = npc.x - GameState.player.x;
+    const dy = npc.y - GameState.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 10) continue;
+
+    const angle = Math.atan2(dy, dx);
+
+    const maxRadiusWorld = 200;
+    const minRadiusWorld = 40;
+    const targetRadiusWorld = Math.min(maxRadiusWorld, Math.max(minRadiusWorld, dist - 80));
+
+    const arrowX = px + Math.cos(angle) * (targetRadiusWorld * scale);
+    const arrowY = py + Math.sin(angle) * (targetRadiusWorld * scale);
+
+    ctx.fillStyle = "#ff4444";
+    ctx.beginPath();
+    ctx.arc(arrowX, arrowY, 4, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
 /* ============================================================
-   OVERLAY
+   OVERLAY + STARTUP
 ============================================================ */
-function showOverlay(text) {
-  uiOverlayText.textContent = text;
-  uiOverlay.style.display = "flex";
-}
 
-function hideOverlay() {
+uiOverlayText.textContent =
+  "The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\n" +
+  "WASD / Arrows: Move\n" +
+  "[E]: Interact\n" +
+  "SPACE: Advance Dialogue";
+
+uiOverlay.style.display = "flex";
+
+uiOverlayBtn.addEventListener("click", () => {
   uiOverlay.style.display = "none";
-}
+  GameState.mode = "dialogue";
+  showDialogue(Scenes.intro);
+});
 
 /* ============================================================
-   MAIN LOOP
+   MAIN LOOP + INIT
 ============================================================ */
+
 let lastTime = performance.now();
 
 function loop(now) {
@@ -657,58 +854,29 @@ function loop(now) {
 
   if (GameState.mode === "map") {
     movePlayer(dt);
-    updateInteractPrompt();
-    renderMap();
-  } else if (GameState.mode === "dialogue") {
-    renderMap();
   }
 
+  updateCamera();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  renderMap();
+  renderNPCs();
+  renderPlayer();
+  renderMinimap();
+
   debugEl.textContent =
-    `mode=${GameState.mode} ` +
-    `x=${GameState.player.x.toFixed(1)} ` +
-    `y=${GameState.player.y.toFixed(1)} ` +
-    `dir=${GameState.player.dir} ` +
-    `state=${GameState.player.animState}`;
+    `mode=${GameState.mode}  x=${GameState.player.x.toFixed(1)}  y=${GameState.player.y.toFixed(1)}`;
 
   requestAnimationFrame(loop);
 }
 
-/* ============================================================
-   INPUT: DIALOGUE + INTERACT
-============================================================ */
-window.addEventListener("keydown", e => {
-  if (e.key === " ") {
-    if (GameState.mode === "dialogue") {
-      advanceDialogue();
-    }
-  }
-  if (e.key.toLowerCase() === "e") {
-    if (GameState.mode === "map") {
-      // later: check which NPC is near and trigger dialogue
-      // for now, just log
-      console.log("Interact pressed");
-    }
-  }
-});
-
-/* ============================================================
-   STARTUP
-============================================================ */
-uiOverlayBtn.addEventListener("click", () => {
-  hideOverlay();
-  GameState.mode = "dialogue";
-  showDialogue(Scenes.intro);
-});
-
 async function startGame() {
+  await loadTileImages();
   await loadPlaceholderSprites();
 
-  showOverlay(
-    "The Time I Woke Up Inside a Museum and Now My Boss Is Making Me Fetch Artifacts\n\n" +
-    "WASD / Arrows: Move\n" +
-    "E: Interact\n" +
-    "SPACE: Finish / Advance Dialogue"
-  );
+  GameState.map = generateMapFromTable(museumTable, 64);
+  GameState.player.x = GameState.map.playerSpawn.x;
+  GameState.player.y = GameState.map.playerSpawn.y;
+  GameState.npcs = GameState.map.npcs;
 
   lastTime = performance.now();
   requestAnimationFrame(loop);
